@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>OpenRadar — Free NOAA Weather</title>
+<title>Itda Weather — Free NOAA Radar</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -23,6 +23,7 @@
   --radius:14px;
   font-size:16px;
 }
+@media (max-width:480px){ :root{ font-size:17.5px; } }
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;background:var(--ink);color:var(--text);font-family:'Inter',system-ui,sans-serif;overflow:hidden}
 #map{position:fixed;inset:0;background:#0a0f16}
@@ -35,8 +36,11 @@ html,body{height:100%;background:var(--ink);color:var(--text);font-family:'Inter
 
 /* ---------- top bar ---------- */
 .topbar{position:fixed;top:0;left:0;right:0;z-index:1000;display:flex;gap:8px;padding:calc(env(safe-area-inset-top) + 10px) 12px 10px;
-  background:linear-gradient(to bottom, rgba(13,19,28,.92), rgba(13,19,28,0));pointer-events:none}
+  background:linear-gradient(to bottom, rgba(13,19,28,.92), rgba(13,19,28,0));pointer-events:none;align-items:center}
 .topbar>*{pointer-events:auto}
+.brand{flex:none;font:700 1.15rem 'Space Grotesk',sans-serif;color:var(--text);letter-spacing:-.01em;padding:0 2px 0 4px;
+  display:flex;align-items:baseline;gap:2px}
+.brand .dot{color:var(--echo)}
 .searchwrap{flex:1;position:relative}
 .search{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:12px;color:var(--text);
   padding:11px 14px;font:500 .95rem 'Inter',sans-serif;outline:none}
@@ -90,6 +94,9 @@ html,body{height:100%;background:var(--ink);color:var(--text);font-family:'Inter
 .tfut{color:var(--future)}
 .frametime{font:500 .8rem 'IBM Plex Mono',monospace;color:var(--text);min-width:64px;text-align:right}
 .frametime.future{color:var(--future)}
+.predbadge{display:none;font:600 .58rem 'IBM Plex Mono',monospace;color:var(--ink);background:var(--future);
+  border-radius:5px;padding:2px 5px;letter-spacing:.06em;margin-right:6px}
+.predbadge.show{display:inline-block}
 
 /* ---------- bottom sheet ---------- */
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:1001;background:var(--panel);
@@ -106,7 +113,7 @@ html,body{height:100%;background:var(--ink);color:var(--text);font-family:'Inter
 .nowtemp .deg{color:var(--echo)}
 .nowmeta{flex:1;min-width:0}
 .nowplace{font:600 .95rem 'Inter',sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.nowcond{color:var(--dim);font-size:.85rem;margin-top:2px}
+.nowcond{color:var(--dim);font-size:.92rem;margin-top:2px}
 .nowicon{font-size:2.2rem;flex:none}
 .alertchip{background:rgba(255,93,93,.14);border:1px solid var(--danger);color:var(--danger);
   font:500 .72rem 'IBM Plex Mono',monospace;border-radius:999px;padding:4px 10px;flex:none;display:none}
@@ -130,7 +137,7 @@ html,body{height:100%;background:var(--ink);color:var(--text);font-family:'Inter
 .day:last-child{border-bottom:none}
 .day .n{width:86px;font:500 .88rem 'Inter',sans-serif;flex:none}
 .day .i{font-size:1.35rem;flex:none;width:32px;text-align:center}
-.day .d{flex:1;color:var(--dim);font-size:.78rem;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.day .d{flex:1;color:var(--dim);font-size:.84rem;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .day .hi{font:500 .95rem 'Space Grotesk',sans-serif;width:36px;text-align:right;flex:none}
 .day .lo{font:400 .95rem 'Space Grotesk',sans-serif;color:var(--dim);width:36px;text-align:right;flex:none}
 
@@ -139,7 +146,7 @@ html,body{height:100%;background:var(--ink);color:var(--text);font-family:'Inter
 .alert h4{font:600 .88rem 'Inter',sans-serif;color:var(--danger)}
 .alert.watch h4{color:var(--warn)}
 .alert .when{font:400 .68rem 'IBM Plex Mono',monospace;color:var(--dim);margin:4px 0 6px}
-.alert p{font-size:.8rem;color:var(--dim);line-height:1.45;max-height:5.8em;overflow:hidden}
+.alert p{font-size:.84rem;color:var(--dim);line-height:1.5;max-height:6.2em;overflow:hidden}
 .alert.expanded p{max-height:none}
 .alert .more{background:none;border:none;color:var(--echo);font:500 .75rem 'Inter',sans-serif;cursor:pointer;padding:4px 0 0}
 
@@ -184,6 +191,15 @@ html,body{height:100%;background:var(--ink);color:var(--text);font-family:'Inter
   font:500 .7rem 'IBM Plex Mono',monospace;color:var(--bolt);display:none}
 .boltstat.show{display:block}
 
+/* ---------- radar color key ---------- */
+.legendbar{display:flex;height:22px;border-radius:6px;overflow:hidden;margin:10px 0 6px}
+.legendbar span{flex:1}
+.legendlabels{display:flex;justify-content:space-between;font:400 .66rem 'IBM Plex Mono',monospace;color:var(--dim);margin-bottom:14px}
+.legendrow{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--dim);margin-bottom:6px}
+.legendrow .sw{width:14px;height:14px;border-radius:4px;flex:none}
+.aqinote{font:400 .74rem 'Inter',sans-serif;color:var(--dim);line-height:1.5;background:var(--panel2);
+  border-radius:10px;padding:9px 11px;margin-top:8px}
+
 /* ---------- settings ---------- */
 .modal{position:fixed;inset:0;z-index:3000;background:rgba(7,11,17,.6);display:none;place-items:center;padding:20px}
 .modal.show{display:grid}
@@ -216,6 +232,7 @@ body.ui-desktop .boltstat{top:auto;right:auto;left:12px;bottom:172px}
 <div id="map"></div>
 
 <div class="topbar">
+  <div class="brand">Itda<span class="dot">.</span></div>
   <div class="searchwrap">
     <input class="search" id="search" type="text" placeholder="Search city or ZIP…" autocomplete="off">
     <div class="results" id="results"></div>
@@ -228,6 +245,7 @@ body.ui-desktop .boltstat{top:auto;right:auto;left:12px;bottom:172px}
 <div class="layers">
   <button class="laybtn" id="boltbtn" title="Live lightning (Blitzortung)">⚡</button>
   <button class="laybtn" id="stormbtn" title="Hurricane tracker (NHC)">🌀<span class="dot" id="stormdot"></span></button>
+  <button class="laybtn" id="keybtn" title="Radar color key">🎨</button>
   <button class="laybtn" id="setbtn" title="Settings">⚙️</button>
 </div>
 <div class="boltstat" id="boltstat">⚡ 0 · last 60 min</div>
@@ -239,6 +257,7 @@ body.ui-desktop .boltstat{top:auto;right:auto;left:12px;bottom:172px}
     <div class="tlabels"><span id="tstart">−70 min</span><span class="tnow">now</span><span class="tfut">+30 min</span></div>
   </div>
   <button class="nowbtn" id="nowbtn" title="Jump to current radar">NOW</button>
+  <span class="predbadge" id="predbadge">PREDICTED</span>
   <div class="frametime" id="frametime">--:--</div>
 </div>
 
@@ -264,7 +283,7 @@ body.ui-desktop .boltstat{top:auto;right:auto;left:12px;bottom:172px}
     <div class="sectionlabel">10-day forecast</div>
     <div id="days"></div>
     <div class="credit">
-      US forecasts &amp; alerts: <a href="https://www.weather.gov" target="_blank">NOAA / National Weather Service</a> ·
+      Itda Weather · Forecasts &amp; alerts: <a href="https://www.weather.gov" target="_blank">NOAA / National Weather Service</a> ·
       Global forecasts, next-2h precip, UV &amp; AQI: <a href="https://open-meteo.com" target="_blank">Open-Meteo</a> ·
       Radar &amp; nowcast: <a href="https://www.rainviewer.com" target="_blank">RainViewer</a> (NOAA NEXRAD fallback via
       <a href="https://mesonet.agron.iastate.edu" target="_blank">IEM</a>) ·
@@ -273,6 +292,23 @@ body.ui-desktop .boltstat{top:auto;right:auto;left:12px;bottom:172px}
       Map © <a href="https://carto.com" target="_blank">CARTO</a>/OSM · Geocoding: Nominatim.
       All free &amp; public. $0/week.
     </div>
+  </div>
+</div>
+
+<div class="modal" id="keymodal">
+  <div class="settingscard">
+    <h3>Radar &amp; map key</h3>
+    <div class="legendrow" style="margin-bottom:2px"><b style="color:var(--text)">Reflectivity (dBZ)</b></div>
+    <div class="legendbar" id="legendbar"></div>
+    <div class="legendlabels"><span>Light</span><span>Moderate</span><span>Heavy</span><span>Extreme</span></div>
+    <div class="legendrow"><span class="sw" style="background:var(--echo)"></span>Timeline tick — past radar (observed)</div>
+    <div class="legendrow"><span class="sw" style="background:var(--future)"></span>Timeline tick — nowcast (predicted, ~30 min out)</div>
+    <div class="legendrow"><span class="sw" style="background:var(--danger);border-radius:50%"></span>Active NWS warning area</div>
+    <div class="legendrow"><span class="sw" style="background:var(--warn);border-radius:50%"></span>Hurricane track / cone of uncertainty</div>
+    <div class="legendrow"><span class="sw" style="background:#fff;border-radius:50%"></span>Lightning strike (fades white→red over 60 min)</div>
+    <div class="legendrow"><span class="sw" style="border:1px solid #fff;background:none;border-radius:50%"></span>Expanding ring = the sound of that strike traveling outward</div>
+    <div class="setnote">Radar colors match the standard NWS reflectivity scale. Predicted radar tops out at ~30 min because that's the physical limit of extrapolating storm motion — the same ceiling every radar app has.</div>
+    <button class="closebtn" id="keyclose">Done</button>
   </div>
 </div>
 
@@ -304,6 +340,21 @@ function showBanner(html){
   b.innerHTML = '<button onclick="this.parentNode.classList.remove(\'show\')">✕</button>' + html;
   b.classList.add("show");
 }
+
+/* Verified from RainViewer's published color table (NEXRAD Level III palette) —
+   the same standard scale NOAA, IEM, and every major radar app renders. */
+const DBZ_STOPS = [
+  ["#04e9e7", "5"], ["#009cf7", "15"], ["#00ff00", "20"], ["#087305", "30"],
+  ["#ffff00", "35"], ["#ecce00", "40"], ["#fe9300", "45"], ["#ff0000", "50"],
+  ["#bd0000", "55"], ["#fe00fe", "65"], ["#9c52c6", "70"], ["#fefefe", "75"]
+];
+document.addEventListener("DOMContentLoaded", buildLegend);
+function buildLegend(){
+  const bar = document.getElementById("legendbar");
+  if (!bar) return;
+  bar.innerHTML = DBZ_STOPS.map(([c])=>`<span style="background:${c}"></span>`).join("");
+}
+buildLegend();
 
 /* ================= MAP ================= */
 const map = L.map("map", { zoomControl:true, attributionControl:true }).setView([39.5,-98.35], 5);
@@ -373,6 +424,7 @@ function showFrame(i){
   const ft = $("frametime");
   ft.textContent = (frameFuture[i] ? "+" : "") + d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
   ft.classList.toggle("future", !!frameFuture[i]);
+  $("predbadge").classList.toggle("show", !!frameFuture[i]);
 }
 function startLoop(){
   if (!radarLayers.length) return;
@@ -404,8 +456,8 @@ async function loadRadar(){
     const future = j.radar.nowcast || [];                  /* ~30 min ahead  */
     const frames = past.concat(future);
     frames.forEach((f,i)=>{
-      const url = `${j.host}${f.path}/256/{z}/{x}/{y}/2/1_1.png`;
-      radarLayers.push(L.tileLayer(url, { opacity:0, maxZoom:19, maxNativeZoom:10, updateWhenZooming:false, keepBuffer:4, attribution:"Radar: RainViewer" }));
+      const url = `${j.host}${f.path}/256/{z}/{x}/{y}/6/1_1.png`;
+      radarLayers.push(L.tileLayer(url, { opacity:0, maxZoom:19, maxNativeZoom:7, updateWhenZooming:false, keepBuffer:4, attribution:"Radar: RainViewer" }));
       frameTimes.push(f.time);
       frameFuture.push(i >= past.length);
     });
@@ -424,7 +476,7 @@ async function loadRadar(){
       const suffix = m === 0 ? "" : "-m" + String(m).padStart(2,"0") + "m";
       radarLayers.push(L.tileLayer(
         `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913${suffix}/{z}/{x}/{y}.png`,
-        { opacity:0, maxZoom:19, maxNativeZoom:10, updateWhenZooming:false, keepBuffer:4, attribution:"Radar: NOAA/IEM" }));
+        { opacity:0, maxZoom:19, maxNativeZoom:10, updateWhenZooming:false, keepBuffer:4, attribution:"Radar: NOAA/IEM (already NEXRAD Level III colors)" }));
       frameTimes.push(now - m*60);
       frameFuture.push(false);
     });
@@ -521,17 +573,19 @@ let marker = null, alertLayer = L.layerGroup().addTo(map);
 
 /* ================= LOAD LOCATION ================= */
 async function loadLocation(lat, lon, label){
+  refLoc = { lat, lon };
   $("nowplace").textContent = label || "Locating…";
   $("nowcond").innerHTML = '<span class="spin">◌</span> Fetching weather…';
   if (marker) marker.remove();
   marker = L.circleMarker([lat,lon], { radius:7, color:"#b7a4ff", weight:2, fillColor:"#b7a4ff", fillOpacity:.5 }).addTo(map);
   map.setView([lat,lon], Math.max(map.getZoom(), 8));
 
-  /* Open-Meteo: global forecast, next-2h precip, UV, sun times (free, open source) */
+  /* Open-Meteo: global forecast, next-2h precip, UV, sun times, dew point,
+     sea-level pressure & visibility (free, open source, no key) */
   const omURL = "https://api.open-meteo.com/v1/forecast?latitude=" + lat.toFixed(4) + "&longitude=" + lon.toFixed(4) +
-    "&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,surface_pressure,precipitation" +
+    "&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,pressure_msl,surface_pressure,precipitation,dew_point_2m" +
     "&minutely_15=precipitation" +
-    "&hourly=temperature_2m,precipitation_probability,weather_code,uv_index" +
+    "&hourly=temperature_2m,precipitation_probability,weather_code,uv_index,dew_point_2m,pressure_msl,visibility" +
     "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max" +
     "&forecast_days=10&timezone=auto&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch";
   const aqURL = "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=" + lat.toFixed(4) + "&longitude=" + lon.toFixed(4) + "&current=us_aqi";
@@ -624,7 +678,16 @@ function renderCurrent(ob, hr, om, aq){
   if (c && c.wind_gusts_10m != null) gust = Math.round(c.wind_gusts_10m) + " mph";
   if (!hum && c && c.relative_humidity_2m != null) hum = Math.round(c.relative_humidity_2m) + "%";
   if (!hum && h0 && h0.relativeHumidity && h0.relativeHumidity.value != null) hum = h0.relativeHumidity.value + "%";
-  if (!press && c && c.surface_pressure != null) press = (c.surface_pressure * 0.02953).toFixed(2) + " in";
+  /* pressure: prefer sea-level (pressure_msl) since that's what other weather apps display */
+  if (!press && c && c.pressure_msl != null) press = (c.pressure_msl * 0.02953).toFixed(2) + " in";
+  else if (!press && c && c.surface_pressure != null) press = (c.surface_pressure * 0.02953).toFixed(2) + " in";
+  /* dew point & visibility: Open-Meteo fallback for stations that don't report them */
+  const omIdx = om ? omNowIdx(om) : -1;
+  if (!dew && c && c.dew_point_2m != null) dew = cToF(c.dew_point_2m) + "°";
+  else if (!dew && om && om.hourly && om.hourly.dew_point_2m && omIdx >= 0) dew = cToF(om.hourly.dew_point_2m[omIdx]) + "°";
+  if (!vis && om && om.hourly && om.hourly.visibility && omIdx >= 0 && om.hourly.visibility[omIdx] != null){
+    vis = Math.round(om.hourly.visibility[omIdx] / 1609.34) + " mi";
+  }
 
   /* Apple-style extras from Open-Meteo */
   let uv = "", aqi = "", sunrise = "", sunset = "";
@@ -647,7 +710,7 @@ function renderCurrent(ob, hr, om, aq){
     ["Gusts", gust || "—"],
     ["Humidity", hum || "—"],
     ["UV index", uv || "—"],
-    ["Air quality", aqi || "—"],
+    ["Air quality*", aqi || "—"],
     ["Pressure", press || "—"],
     ["Visibility", vis || "—"],
     ["Dew point", dew || "—"],
@@ -655,7 +718,8 @@ function renderCurrent(ob, hr, om, aq){
     ["Sunset", sunset || "—"],
     ["Moon", moonPhase()]
   ];
-  $("stats").innerHTML = stats.map(([k,v])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+  $("stats").innerHTML = stats.map(([k,v])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("") +
+    (aqi ? '<div class="aqinote" style="grid-column:1/-1">*Air quality is a global satellite/model estimate (Open-Meteo/CAMS), not a ground monitor — it can run higher than station-based apps like Apple or AirNow, especially for ozone.</div>' : "");
 }
 
 /* Apple-style next-hour precipitation (15-min steps, next 2 hours) */
@@ -858,11 +922,26 @@ $("stormbtn").addEventListener("click", async ()=>{
 (async ()=>{ try { const n = await loadStorms(); stormsLoaded = true; if (n>0) $("stormdot").classList.add("show"); } catch(e){} })();
 
 /* ================= LIVE LIGHTNING (Blitzortung community network) =================
-   Styled like lightningmaps.org: a white ring "pings" outward when a strike
-   arrives, then the dot ages white → yellow → orange → red over 60 minutes. */
+   Styled like lightningmaps.org: each strike gets (1) a quick white "ping" where
+   it hit, and (2) a real geographic circle that expands outward at 343 m/s — the
+   actual speed of sound — so you can see how far the thunder has traveled and,
+   if you've searched/located near it, exactly when you'd hear it. */
 let boltWS = null, boltOn = false, boltHosts = [1,7,8], boltHostIdx = 0;
 const boltLayer = L.layerGroup();
-const strikes = [];   /* { m: marker, t: ms } */
+const strikes = [];      /* dot markers: { m, t } */
+const soundRings = [];   /* expanding circles: { circle, start, lat, lon } */
+const pendingThunder = []; /* { at (ms timestamp), km } for strikes within earshot of refLoc */
+const SPEED_OF_SOUND = 343;        /* m/s */
+const MAX_AUDIBLE_M = 20000;       /* thunder is rarely heard past ~20 km */
+let refLoc = null;                 /* last searched/geolocated point, for the countdown */
+let soundRAF = null;
+
+function haversineMeters(lat1, lon1, lat2, lon2){
+  const R = 6371000, toRad = d => d*Math.PI/180;
+  const dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
 
 /* Blitzortung streams LZW-compressed JSON strings */
 function lzwDecode(data){
@@ -883,11 +962,35 @@ function lzwDecode(data){
 }
 
 function addStrike(lat, lon){
+  /* the flash */
   const ic = L.divIcon({ className:"strike age0", html:'<span class="ring"></span><span class="dot"></span>', iconSize:[0,0] });
   const m = L.marker([lat, lon], { icon: ic, interactive:false }).addTo(boltLayer);
   strikes.push({ m, t: Date.now() });
   if (strikes.length > 2000){ const old = strikes.shift(); boltLayer.removeLayer(old.m); }
+
+  /* the sound — a real-world circle that grows at 343 m/s */
+  const circle = L.circle([lat, lon], { radius:1, color:"#fff", weight:1, opacity:.55, fillColor:"#fff", fillOpacity:.05, interactive:false }).addTo(boltLayer);
+  soundRings.push({ circle, start: Date.now(), lat, lon });
+  if (!soundRAF) soundRAF = requestAnimationFrame(tickRings);
+
+  if (refLoc){
+    const distM = haversineMeters(refLoc.lat, refLoc.lon, lat, lon);
+    if (distM <= MAX_AUDIBLE_M){
+      pendingThunder.push({ at: Date.now() + (distM / SPEED_OF_SOUND) * 1000, km: distM/1000 });
+    }
+  }
   updateBoltStat();
+}
+function tickRings(){
+  const now = Date.now();
+  for (let i = soundRings.length - 1; i >= 0; i--){
+    const r = soundRings[i];
+    const radius = ((now - r.start) / 1000) * SPEED_OF_SOUND;
+    if (radius > MAX_AUDIBLE_M){ boltLayer.removeLayer(r.circle); soundRings.splice(i,1); continue; }
+    r.circle.setRadius(radius);
+    r.circle.setStyle({ opacity: Math.max(0, .55 * (1 - radius/MAX_AUDIBLE_M)) });
+  }
+  soundRAF = boltOn ? requestAnimationFrame(tickRings) : null;
 }
 function ageSweep(){
   const now = Date.now();
@@ -903,15 +1006,25 @@ function ageSweep(){
   updateBoltStat();
 }
 setInterval(ageSweep, 20000);
+
 function updateBoltStat(){
-  $("boltstat").textContent = "⚡ " + strikes.length + " · last 60 min";
+  const now = Date.now();
+  while (pendingThunder.length && pendingThunder[0].at <= now) pendingThunder.shift();
+  pendingThunder.sort((a,b)=> a.at - b.at);
+  if (pendingThunder.length){
+    const secs = Math.max(0, Math.round((pendingThunder[0].at - now)/1000));
+    $("boltstat").textContent = `⚡ ${strikes.length} · 🔊 thunder in ${secs}s (${pendingThunder[0].km.toFixed(1)} km)`;
+  } else {
+    $("boltstat").textContent = "⚡ " + strikes.length + " · last 60 min";
+  }
 }
+setInterval(()=>{ if (boltOn) updateBoltStat(); }, 1000);
 
 function connectBolts(){
   try {
     boltWS = new WebSocket(`wss://ws${boltHosts[boltHostIdx]}.blitzortung.org/`);
   } catch(e){ toast("Lightning stream unavailable"); return; }
-  boltWS.onopen = () => { boltWS.send(JSON.stringify({ a: 111 })); toast("Live lightning on — strikes ping as they happen ⚡"); };
+  boltWS.onopen = () => { boltWS.send(JSON.stringify({ a: 111 })); toast("Live lightning on — watch the ring for when you'll hear it ⚡"); };
   boltWS.onmessage = msg => {
     try {
       const s = JSON.parse(lzwDecode(msg.data));
@@ -934,10 +1047,11 @@ $("boltbtn").addEventListener("click", ()=>{
   if (boltOn){
     boltLayer.addTo(map);
     updateBoltStat();
+    if (!soundRAF) soundRAF = requestAnimationFrame(tickRings);
     connectBolts();
   } else {
     if (boltWS) boltWS.close();
-    strikes.length = 0;
+    strikes.length = 0; soundRings.length = 0; pendingThunder.length = 0;
     boltLayer.clearLayers();
     map.removeLayer(boltLayer);
   }
@@ -1001,6 +1115,10 @@ $("setbtn").addEventListener("click", ()=> $("settingsmodal").classList.add("sho
 $("settingsclose").addEventListener("click", ()=> $("settingsmodal").classList.remove("show"));
 $("settingsmodal").addEventListener("click", e=>{ if (e.target === $("settingsmodal")) $("settingsmodal").classList.remove("show"); });
 
+$("keybtn").addEventListener("click", ()=> $("keymodal").classList.add("show"));
+$("keyclose").addEventListener("click", ()=> $("keymodal").classList.remove("show"));
+$("keymodal").addEventListener("click", e=>{ if (e.target === $("keymodal")) $("keymodal").classList.remove("show"); });
+
 function segWire(id, fn){
   $(id).querySelectorAll("button").forEach(b=>{
     b.addEventListener("click", ()=>{
@@ -1019,7 +1137,7 @@ $("opacityrange").addEventListener("input", e => {
 
 /* boot */
 geolocate(true);
-toast("▶ plays the radar loop — amber ticks are the next 30 min forecast", 5000);
+toast("▶ plays the radar loop · tap 🎨 for the color key", 5000);
 </script>
 </body>
 </html>
