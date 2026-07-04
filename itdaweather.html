@@ -163,14 +163,52 @@ html,body{height:100%;background:var(--ink);color:var(--text);font-family:'Inter
 .spin{display:inline-block;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .bolt-marker{filter:drop-shadow(0 0 4px rgba(255,228,94,.9))}
+/* ---------- NOW button ---------- */
+.nowbtn{flex:none;border:1px solid var(--line);background:var(--panel2);color:var(--dim);
+  font:500 .68rem 'IBM Plex Mono',monospace;border-radius:8px;padding:7px 9px;cursor:pointer;letter-spacing:.05em}
+.nowbtn.flash{animation:nowflash .7s ease}
+@keyframes nowflash{0%,100%{background:var(--panel2);color:var(--dim)}40%{background:var(--echo);color:var(--ink)}}
+
+/* ---------- lightning (lightningmaps.org style) ---------- */
+.strike{pointer-events:none}
+.strike .dot{position:absolute;top:-3px;left:-3px;width:7px;height:7px;border-radius:50%;
+  background:#fff;box-shadow:0 0 7px 2px rgba(255,255,255,.85)}
+.strike.age1 .dot{background:#ffe45e;box-shadow:0 0 6px 1px rgba(255,228,94,.7)}
+.strike.age2 .dot{background:#ff9e3d;box-shadow:0 0 5px 1px rgba(255,158,61,.55)}
+.strike.age3 .dot{background:#ff5d5d;box-shadow:0 0 4px 1px rgba(255,93,93,.4)}
+.strike .ring{position:absolute;top:0;left:0;width:6px;height:6px;margin:-3px 0 0 -3px;border:2px solid #fff;
+  border-radius:50%;opacity:.95;animation:ping 1.4s cubic-bezier(.2,.7,.4,1) forwards}
+@keyframes ping{to{width:72px;height:72px;margin:-36px 0 0 -36px;opacity:0}}
+.boltstat{position:fixed;right:12px;top:calc(env(safe-area-inset-top) + 312px);z-index:1000;
+  background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 12px;
+  font:500 .7rem 'IBM Plex Mono',monospace;color:var(--bolt);display:none}
+.boltstat.show{display:block}
+
+/* ---------- settings ---------- */
+.modal{position:fixed;inset:0;z-index:3000;background:rgba(7,11,17,.6);display:none;place-items:center;padding:20px}
+.modal.show{display:grid}
+.settingscard{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px;width:min(360px,100%)}
+.settingscard h3{font:700 1.05rem 'Space Grotesk',sans-serif;margin-bottom:16px}
+.setrow{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.setrow label{font-size:.85rem;color:var(--dim)}
+.seg{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.seg button{background:none;border:none;color:var(--dim);font:500 .78rem 'Inter',sans-serif;padding:7px 12px;cursor:pointer}
+.seg button.on{background:var(--echo);color:var(--ink)}
+input[type=range]{accent-color:var(--echo);width:130px}
+.setnote{font:400 .68rem 'IBM Plex Mono',monospace;color:var(--dim);margin:4px 0 14px}
+.closebtn{width:100%;background:var(--echo);color:var(--ink);border:none;border-radius:10px;padding:10px;
+  font:600 .9rem 'Inter',sans-serif;cursor:pointer}
+
 @media (prefers-reduced-motion: reduce){
   .sheet,.timeline,.tick{transition:none}
+  .strike .ring{animation:none;opacity:0}
+  .nowbtn.flash{animation:none}
 }
-@media (min-width:720px){
-  .sheet{left:auto;right:16px;bottom:16px;width:400px;border-radius:20px;border:1px solid var(--line)}
-  .timeline{right:auto;width:480px}
-  .layers{right:auto;left:12px;top:auto;bottom:110px;flex-direction:row}
-}
+/* Laptop layout — applied by the Settings "Layout" choice (or Auto on wide screens) */
+body.ui-desktop .sheet{left:auto;right:16px;bottom:16px;width:400px;border-radius:20px;border:1px solid var(--line)}
+body.ui-desktop .timeline{right:auto;width:480px}
+body.ui-desktop .layers{right:auto;left:12px;top:auto;bottom:110px;flex-direction:row}
+body.ui-desktop .boltstat{top:auto;right:auto;left:12px;bottom:172px}
 </style>
 </head>
 <body>
@@ -190,7 +228,9 @@ html,body{height:100%;background:var(--ink);color:var(--text);font-family:'Inter
 <div class="layers">
   <button class="laybtn" id="boltbtn" title="Live lightning (Blitzortung)">⚡</button>
   <button class="laybtn" id="stormbtn" title="Hurricane tracker (NHC)">🌀<span class="dot" id="stormdot"></span></button>
+  <button class="laybtn" id="setbtn" title="Settings">⚙️</button>
 </div>
+<div class="boltstat" id="boltstat">⚡ 0 · last 60 min</div>
 
 <div class="timeline" id="timeline">
   <button class="playbtn" id="playbtn" title="Play radar loop">▶</button>
@@ -198,6 +238,7 @@ html,body{height:100%;background:var(--ink);color:var(--text);font-family:'Inter
     <div class="ticks" id="ticks"></div>
     <div class="tlabels"><span id="tstart">−70 min</span><span class="tnow">now</span><span class="tfut">+30 min</span></div>
   </div>
+  <button class="nowbtn" id="nowbtn" title="Jump to current radar">NOW</button>
   <div class="frametime" id="frametime">--:--</div>
 </div>
 
@@ -235,6 +276,21 @@ html,body{height:100%;background:var(--ink);color:var(--text);font-family:'Inter
   </div>
 </div>
 
+<div class="modal" id="settingsmodal">
+  <div class="settingscard">
+    <h3>Settings</h3>
+    <div class="setrow"><label>Layout</label>
+      <div class="seg" id="uiseg"><button data-v="auto" class="on">Auto</button><button data-v="mobile">Mobile</button><button data-v="desktop">Laptop</button></div>
+    </div>
+    <div class="setrow"><label>Radar opacity</label><input type="range" id="opacityrange" min="20" max="100" value="72"></div>
+    <div class="setrow"><label>Loop speed</label>
+      <div class="seg" id="speedseg"><button data-v="900">Slow</button><button data-v="550" class="on">Normal</button><button data-v="300">Fast</button></div>
+    </div>
+    <div class="setnote">Applies instantly · resets when the page reloads</div>
+    <button class="closebtn" id="settingsclose">Done</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -267,12 +323,13 @@ setTimeout(()=>{
 }, 6000);
 
 /* ================= RADAR LOOP (RainViewer: global past 70 min + 30 min future) ================= */
-let radarLayers = [], frameTimes = [], frameFuture = [], frame = 0;
+let radarLayers = [], frameTimes = [], frameFuture = [], frame = 0, nowIdx = 0;
 let playing = false, playTimer = null;
+let radarOpacity = 0.72, loopSpeed = 550;
 
 function clearRadar(){
-  radarLayers.forEach(l => map.removeLayer(l));
-  radarLayers = []; frameTimes = []; frameFuture = [];
+  radarLayers.forEach(l => { if (map.hasLayer(l)) map.removeLayer(l); });
+  radarLayers = []; frameTimes = []; frameFuture = []; nowIdx = 0;
   $("ticks").innerHTML = "";
 }
 
@@ -292,9 +349,24 @@ function buildTicks(){
   });
 }
 
+function ensureOnMap(i){
+  const l = radarLayers[i];
+  if (l && !map.hasLayer(l)){ l.setOpacity(0); l.addTo(map); }
+}
+/* Only the visible frame (plus a preloaded neighbor) stays on the map, so
+   zooming refetches at most 2 layers instead of a dozen — no more blank radar. */
 function showFrame(i){
+  if (!radarLayers.length) return;
   frame = i;
-  radarLayers.forEach((l,j)=> l.setOpacity(j===i ? 0.72 : 0));
+  ensureOnMap(i);
+  radarLayers[i].setOpacity(radarOpacity);
+  radarLayers.forEach((l,j)=>{
+    if (j === i) return;
+    l.setOpacity(0);
+    const dist = Math.min(Math.abs(j-i), radarLayers.length - Math.abs(j-i));
+    if (dist > 1 && map.hasLayer(l)) map.removeLayer(l);
+  });
+  ensureOnMap((i+1) % radarLayers.length);   /* preload the next frame */
   const ticks = Array.from(document.querySelectorAll(".tick:not(.divider)"));
   ticks.forEach((t,j)=> t.classList.toggle("active", j===i));
   const d = new Date(frameTimes[i]*1000);
@@ -305,13 +377,20 @@ function showFrame(i){
 function startLoop(){
   if (!radarLayers.length) return;
   playing = true; $("playbtn").textContent = "❚❚"; $("playbtn").classList.add("playing");
-  playTimer = setInterval(()=> showFrame((frame+1) % radarLayers.length), 550);
+  clearInterval(playTimer);
+  playTimer = setInterval(()=> showFrame((frame+1) % radarLayers.length), loopSpeed);
 }
 function stopLoop(){
   playing = false; $("playbtn").textContent = "▶"; $("playbtn").classList.remove("playing");
   clearInterval(playTimer);
 }
 $("playbtn").addEventListener("click", ()=> playing ? stopLoop() : startLoop());
+$("nowbtn").addEventListener("click", ()=>{
+  stopLoop();
+  showFrame(nowIdx);
+  const b = $("nowbtn");
+  b.classList.remove("flash"); void b.offsetWidth; b.classList.add("flash");
+});
 
 async function loadRadar(){
   const wasPlaying = playing;
@@ -326,13 +405,14 @@ async function loadRadar(){
     const frames = past.concat(future);
     frames.forEach((f,i)=>{
       const url = `${j.host}${f.path}/256/{z}/{x}/{y}/2/1_1.png`;
-      radarLayers.push(L.tileLayer(url, { opacity:0, maxZoom:19, attribution:"Radar: RainViewer" }).addTo(map));
+      radarLayers.push(L.tileLayer(url, { opacity:0, maxZoom:19, maxNativeZoom:10, updateWhenZooming:false, keepBuffer:4, attribution:"Radar: RainViewer" }));
       frameTimes.push(f.time);
       frameFuture.push(i >= past.length);
     });
     $("tstart").textContent = "−" + Math.round((frameTimes[frameTimes.length-future.length-1] - frameTimes[0])/60) + " min";
     buildTicks();
-    showFrame(past.length - 1);   /* start at "now" */
+    nowIdx = Math.max(0, past.length - 1);
+    showFrame(nowIdx);   /* start at "now" */
     if (wasPlaying) startLoop();
   } catch(e){
     /* Fallback: NOAA NEXRAD via IEM (US only, past 50 min) */
@@ -344,14 +424,15 @@ async function loadRadar(){
       const suffix = m === 0 ? "" : "-m" + String(m).padStart(2,"0") + "m";
       radarLayers.push(L.tileLayer(
         `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913${suffix}/{z}/{x}/{y}.png`,
-        { opacity:0, maxZoom:19, attribution:"Radar: NOAA/IEM" }).addTo(map));
+        { opacity:0, maxZoom:19, maxNativeZoom:10, updateWhenZooming:false, keepBuffer:4, attribution:"Radar: NOAA/IEM" }));
       frameTimes.push(now - m*60);
       frameFuture.push(false);
     });
     $("tstart").textContent = "−50 min";
     document.querySelector(".tfut").textContent = "";
     buildTicks();
-    showFrame(radarLayers.length - 1);
+    nowIdx = radarLayers.length - 1;
+    showFrame(nowIdx);
   }
 }
 loadRadar();
@@ -361,8 +442,10 @@ setInterval(loadRadar, 5*60000);   /* refresh frames every 5 min */
 function placeTimeline(){
   const rect = $("sheet").getBoundingClientRect();
   const collapsed = !$("sheet").classList.contains("open");
-  const isDesktop = window.matchMedia("(min-width:720px)").matches;
-  if (isDesktop){ $("timeline").style.bottom = "16px"; $("timeline").style.left = "16px"; return; }
+  if (document.body.classList.contains("ui-desktop")){
+    $("timeline").style.bottom = "16px"; $("timeline").style.left = "16px"; return;
+  }
+  $("timeline").style.left = "12px";
   $("timeline").style.bottom = collapsed ? "130px" : (window.innerHeight - rect.top + 12) + "px";
 }
 placeTimeline();
@@ -774,10 +857,12 @@ $("stormbtn").addEventListener("click", async ()=>{
 /* auto-check quietly so the badge lights up during active storms */
 (async ()=>{ try { const n = await loadStorms(); stormsLoaded = true; if (n>0) $("stormdot").classList.add("show"); } catch(e){} })();
 
-/* ================= LIVE LIGHTNING (Blitzortung community network) ================= */
+/* ================= LIVE LIGHTNING (Blitzortung community network) =================
+   Styled like lightningmaps.org: a white ring "pings" outward when a strike
+   arrives, then the dot ages white → yellow → orange → red over 60 minutes. */
 let boltWS = null, boltOn = false, boltHosts = [1,7,8], boltHostIdx = 0;
 const boltLayer = L.layerGroup();
-const boltIcon = L.divIcon({ className:"bolt-marker", html:"⚡", iconSize:[16,16], iconAnchor:[8,8] });
+const strikes = [];   /* { m: marker, t: ms } */
 
 /* Blitzortung streams LZW-compressed JSON strings */
 function lzwDecode(data){
@@ -797,21 +882,40 @@ function lzwDecode(data){
   return result.join("");
 }
 
+function addStrike(lat, lon){
+  const ic = L.divIcon({ className:"strike age0", html:'<span class="ring"></span><span class="dot"></span>', iconSize:[0,0] });
+  const m = L.marker([lat, lon], { icon: ic, interactive:false }).addTo(boltLayer);
+  strikes.push({ m, t: Date.now() });
+  if (strikes.length > 2000){ const old = strikes.shift(); boltLayer.removeLayer(old.m); }
+  updateBoltStat();
+}
+function ageSweep(){
+  const now = Date.now();
+  for (let i = strikes.length - 1; i >= 0; i--){
+    const age = now - strikes[i].t;
+    if (age > 60*60000){ boltLayer.removeLayer(strikes[i].m); strikes.splice(i,1); continue; }
+    const el = strikes[i].m.getElement();
+    if (el){
+      el.classList.remove("age0","age1","age2","age3");
+      el.classList.add(age < 5*60000 ? "age0" : age < 20*60000 ? "age1" : age < 40*60000 ? "age2" : "age3");
+    }
+  }
+  updateBoltStat();
+}
+setInterval(ageSweep, 20000);
+function updateBoltStat(){
+  $("boltstat").textContent = "⚡ " + strikes.length + " · last 60 min";
+}
+
 function connectBolts(){
   try {
     boltWS = new WebSocket(`wss://ws${boltHosts[boltHostIdx]}.blitzortung.org/`);
   } catch(e){ toast("Lightning stream unavailable"); return; }
-  boltWS.onopen = () => { boltWS.send(JSON.stringify({ a: 111 })); toast("Live lightning on — strikes appear as they happen ⚡"); };
+  boltWS.onopen = () => { boltWS.send(JSON.stringify({ a: 111 })); toast("Live lightning on — strikes ping as they happen ⚡"); };
   boltWS.onmessage = msg => {
     try {
       const s = JSON.parse(lzwDecode(msg.data));
-      if (s && typeof s.lat === "number" && typeof s.lon === "number"){
-        const m = L.marker([s.lat, s.lon], { icon: boltIcon, interactive:false }).addTo(boltLayer);
-        setTimeout(()=> boltLayer.removeLayer(m), 8*60000);   /* fade after 8 min */
-        if (boltLayer.getLayers().length > 600){
-          boltLayer.removeLayer(boltLayer.getLayers()[0]);
-        }
-      }
+      if (s && typeof s.lat === "number" && typeof s.lon === "number") addStrike(s.lat, s.lon);
     } catch(e){ /* skip undecodable frame */ }
   };
   boltWS.onerror = () => {};
@@ -826,11 +930,14 @@ function connectBolts(){
 $("boltbtn").addEventListener("click", ()=>{
   boltOn = !boltOn;
   $("boltbtn").classList.toggle("on", boltOn);
+  $("boltstat").classList.toggle("show", boltOn);
   if (boltOn){
     boltLayer.addTo(map);
+    updateBoltStat();
     connectBolts();
   } else {
     if (boltWS) boltWS.close();
+    strikes.length = 0;
     boltLayer.clearLayers();
     map.removeLayer(boltLayer);
   }
@@ -878,6 +985,37 @@ function geolocate(silent){
   );
 }
 $("locbtn").addEventListener("click", ()=>geolocate(false));
+
+/* ================= SETTINGS ================= */
+let uiMode = "auto";
+const mq = window.matchMedia("(min-width:720px)");
+function applyUiMode(){
+  const desktop = uiMode === "desktop" || (uiMode === "auto" && mq.matches);
+  document.body.classList.toggle("ui-desktop", desktop);
+  placeTimeline();
+}
+if (mq.addEventListener) mq.addEventListener("change", ()=>{ if (uiMode === "auto") applyUiMode(); });
+applyUiMode();
+
+$("setbtn").addEventListener("click", ()=> $("settingsmodal").classList.add("show"));
+$("settingsclose").addEventListener("click", ()=> $("settingsmodal").classList.remove("show"));
+$("settingsmodal").addEventListener("click", e=>{ if (e.target === $("settingsmodal")) $("settingsmodal").classList.remove("show"); });
+
+function segWire(id, fn){
+  $(id).querySelectorAll("button").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      $(id).querySelectorAll("button").forEach(x=>x.classList.remove("on"));
+      b.classList.add("on");
+      fn(b.dataset.v);
+    });
+  });
+}
+segWire("uiseg", v => { uiMode = v; applyUiMode(); });
+segWire("speedseg", v => { loopSpeed = +v; if (playing) startLoop(); });
+$("opacityrange").addEventListener("input", e => {
+  radarOpacity = e.target.value / 100;
+  if (radarLayers[frame]) radarLayers[frame].setOpacity(radarOpacity);
+});
 
 /* boot */
 geolocate(true);
