@@ -330,13 +330,16 @@ body.ui-desktop .boltstat{top:auto;right:auto;left:12px;bottom:172px}
     <div class="legendrow" style="margin-bottom:2px"><b style="color:var(--text)">Reflectivity (dBZ)</b></div>
     <div class="legendbar" id="legendbar"></div>
     <div class="legendlabels"><span>Light</span><span>Moderate</span><span>Heavy</span><span>Extreme</span></div>
+    <div class="legendrow" style="margin:8px 0 2px"><b style="color:var(--text)">Global radar layer (Universal Blue)</b></div>
+    <div class="legendbar" style="background:linear-gradient(90deg,#cfe9ff,#5aa9e6,#1462c4,#083a75)"></div>
+    <div class="legendlabels"><span>Light</span><span></span><span></span><span>Heavy</span></div>
     <div class="legendrow"><span class="sw" style="background:var(--echo)"></span>Timeline tick — past radar (observed)</div>
     <div class="legendrow"><span class="sw" style="background:var(--future)"></span>Timeline tick — nowcast (predicted, ~30 min out)</div>
     <div class="legendrow"><span class="sw" style="background:var(--danger);border-radius:50%"></span>Active NWS warning area</div>
     <div class="legendrow"><span class="sw" style="background:var(--warn);border-radius:50%"></span>Hurricane track / cone of uncertainty</div>
     <div class="legendrow"><span class="sw" style="background:#fff;border-radius:50%"></span>Lightning strike (fades white→red over 60 min)</div>
     <div class="legendrow"><span class="sw" style="border:1px solid #fff;background:none;border-radius:50%"></span>Expanding ring = the sound of that strike traveling outward</div>
-    <div class="setnote">Radar colors match the standard NWS reflectivity scale. Predicted radar tops out at ~30 min because that's the physical limit of extrapolating storm motion — the same ceiling every radar app has.</div>
+    <div class="setnote">Radar colors match the standard NWS reflectivity scale. Predicted frames are computed on-device by tracking real radar motion between the last two frames (~30 min ahead — the physical limit of motion extrapolation).</div>
     <button class="closebtn" id="keyclose">Done</button>
   </div>
 </div>
@@ -482,7 +485,7 @@ function stopLoop(){
 }
 $("playbtn").addEventListener("click", ()=> playing ? stopLoop() : startLoop());
 $("fcstbtn").addEventListener("click", ()=>{
-  if (!frameFuture.some(Boolean)){ toast("Predicted frames unavailable right now (radar fallback source has no nowcast)"); return; }
+  if (!frameFuture.some(Boolean)){ toast("Prediction frames still loading — give it a few seconds and tap again"); return; }
   fcstMode = !fcstMode;
   $("fcstbtn").classList.toggle("on", fcstMode);
   stopLoop();
@@ -502,19 +505,236 @@ $("nowbtn").addEventListener("click", ()=>{
   b.classList.remove("flash"); void b.offsetWidth; b.classList.add("flash");
 });
 
+/* Retry RainViewer once before giving up — transient failures are common */
+async function fetchRadarJson(){
+  for (let attempt = 0; attempt < 2; attempt++){
+    try {
+      const r = await fetch("https://api.rainviewer.com/public/weather-maps.json");
+      if (r.ok) return r.json();
+    } catch(e){ /* retry */ }
+    if (attempt === 0) await new Promise(res => setTimeout(res, 1800));
+  }
+  throw new Error("rainviewer unreachable");
+}
+
+/* When radar-based nowcast is unavailable, build +15/+30 min prediction frames
+   ourselves from Open-Meteo's 15-minute short-range model (HRRR in the US) and
+   slot them into the normal timeline, so the scrubber ALWAYS has prediction. */
+async function buildFallbackPrediction(){
+  try {
+    const b = map.getBounds().pad(0.5);
+    const NX = 10, NY = 8;
+    const lats = [], lons = [];
+    for (let r = 0; r < NY; r++){
+      for (let c2 = 0; c2 < NX; c2++){
+        lats.push((b.getSouth() + (r + 0.5)/NY * (b.getNorth() - b.getSouth())).toFixed(3));
+        lons.push((b.getWest() + (c2 + 0.5)/NX * (b.getEast() - b.getWest())).toFixed(3));
+      }
+    }
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lats.join(",")}&longitude=${lons.join(",")}&minutely_15=precipitation&forecast_days=1&timezone=UTC`);
+    if (!r.ok) throw new Error("om grid " + r.status);
+    let j = await r.json();
+    if (!Array.isArray(j)) j = [j];
+    const times = j[0].minutely_15.time;
+    const nowIso = new Date().toISOString().slice(0,16);
+    let t0 = times.findIndex(t => t >= nowIso);
+    if (t0 < 0) t0 = times.length - 3;
+    [t0 + 1, t0 + 2].forEach(idx => {          /* ≈ +15 and +30 min */
+      if (idx >= times.length) return;
+      const canvas = document.createElement("canvas");
+      canvas.width = NX; canvas.height = NY;
+      const ctx = canvas.getContext("2d");
+      for (let row = 0; row < NY; row++){
+        for (let c2 = 0; c2 < NX; c2++){
+          const arr = j[row * NX + c2].minutely_15.precipitation;
+          const mmPerH = (arr && arr[idx] != null ? arr[idx] : 0) * 4;   /* 15-min sum → rate */
+          const col = precipColorMM(mmPerH);
+          if (col){ ctx.fillStyle = col; ctx.fillRect(c2, NY - 1 - row, 1, 1); }
+        }
+      }
+      const ov = L.imageOverlay(canvas.toDataURL(), b, { opacity:0, interactive:false });
+      radarLayers.push(ov);
+      frameTimes.push(Math.floor(new Date(times[idx] + "Z").getTime() / 1000));
+      frameFuture.push(true);
+    });
+    if (frameFuture.some(Boolean)){
+      const futMin = Math.round((frameTimes[frameTimes.length-1] - frameTimes[nowIdx]) / 60);
+      document.querySelector(".tfut").textContent = "+" + Math.max(15, futMin) + " min";
+      buildTicks();
+      showFrame(frame);
+      toast("Prediction ready — amber frames are model-based (radar nowcast offline)", 4000);
+    }
+  } catch(e){ /* leave past-only; auto-retry happens on the 5-min refresh */ }
+}
+
+/* ================= RADAR-BASED PREDICTION (DIY nowcast) =================
+   RainViewer removed nowcast from its free API (past radar only now), so we
+   compute our own the way all nowcasts work: compare the last two radar frames
+   pixel-by-pixel to measure how the precipitation field is moving, then push
+   the current frame forward along that motion. Pure radar — no forecast model.
+   Only if the browser can't read radar pixels (tile-server CORS) do we fall
+   back to the 15-minute model grid. */
+let lastRadarSource = null, predKind = null, predRegenT = null, predToastShown = false;
+
+function clearPredictionFrames(){
+  for (let i = radarLayers.length - 1; i >= 0; i--){
+    if (frameFuture[i]){
+      if (map.hasLayer(radarLayers[i])) map.removeLayer(radarLayers[i]);
+      radarLayers.splice(i,1); frameTimes.splice(i,1); frameFuture.splice(i,1);
+    }
+  }
+  nowIdx = Math.max(0, radarLayers.length - 1);
+  if (frame > nowIdx) frame = nowIdx;
+  document.querySelector(".tfut").textContent = "";
+  buildTicks();
+}
+
+async function rasterizeRadar(urlFor, b, W, H){
+  const lon2t = lon => (lon + 180) / 360;
+  const lat2t = lat => { const s = Math.sin(lat * Math.PI/180); return 0.5 - Math.log((1+s)/(1-s)) / (4*Math.PI); };
+  let z = Math.min(7, Math.max(3, Math.floor(map.getZoom())));
+  let n, x0, x1, y0, y1;
+  for (;;){
+    n = Math.pow(2, z);
+    x0 = Math.floor(lon2t(b.getWest()) * n);  x1 = Math.floor(lon2t(b.getEast()) * n);
+    y0 = Math.floor(lat2t(b.getNorth()) * n); y1 = Math.floor(lat2t(b.getSouth()) * n);
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) <= 20 || z <= 3) break;
+    z--;
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  const u0 = lon2t(b.getWest())*n, u1 = lon2t(b.getEast())*n;
+  const v0 = lat2t(b.getNorth())*n, v1 = lat2t(b.getSouth())*n;
+  const jobs = [];
+  for (let tx = x0; tx <= x1; tx++){
+    for (let ty = y0; ty <= y1; ty++){
+      jobs.push(new Promise(res => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          ctx.drawImage(img, (tx - u0)/(u1 - u0)*W, (ty - v0)/(v1 - v0)*H, W/(u1 - u0), H/(v1 - v0));
+          res();
+        };
+        img.onerror = () => res();   /* missing tile = clear air */
+        img.src = urlFor(z, tx, ty);
+      }));
+    }
+  }
+  await Promise.race([
+    Promise.all(jobs),
+    new Promise((_, rej) => setTimeout(()=>rej(new Error("tile timeout")), 9000))
+  ]);
+  return { canvas, data: ctx.getImageData(0, 0, W, H).data };   /* throws here if CORS-tainted */
+}
+
+/* Block-matching motion estimate between two rasterized radar frames.
+   Returns pixel shift per frame interval. */
+function estimateMotion(d0, d1, W, H){
+  const inten = (d, i) => d[i+3] < 40 ? 0 : (d[i] + d[i+1] + d[i+2]);
+  let echo = 0, totalSamples = 0;
+  for (let y = 0; y < H; y += 4)
+    for (let x = 0; x < W; x += 4){
+      totalSamples++;
+      if (inten(d1, (y*W + x)*4) > 0) echo++;
+    }
+  if (echo < Math.max(40, totalSamples * 0.004)) return { dx:0, dy:0 };   /* clear air — hold steady */
+  const margin = 26;
+  const evalShift = (dx, dy, step) => {
+    let score = 0, n = 0;
+    for (let y = margin; y < H - margin; y += step){
+      for (let x = margin; x < W - margin; x += step){
+        const a1 = inten(d1, (y*W + x)*4);
+        const a0 = inten(d0, ((y - dy)*W + (x - dx))*4);
+        if (a1 || a0){ score += Math.abs(a1 - a0); n++; }
+      }
+    }
+    return n > 20 ? score / n : Infinity;
+  };
+  let best = { dx:0, dy:0, s: evalShift(0, 0, 4) };
+  for (let dy = -24; dy <= 24; dy += 3)
+    for (let dx = -24; dx <= 24; dx += 3){
+      const s = evalShift(dx, dy, 4);
+      if (s < best.s) best = { dx, dy, s };
+    }
+  for (let dy = best.dy - 2; dy <= best.dy + 2; dy++)
+    for (let dx = best.dx - 2; dx <= best.dx + 2; dx++){
+      const s = evalShift(dx, dy, 2);
+      if (s < best.s) best = { dx, dy, s };
+    }
+  return { dx: best.dx, dy: best.dy };
+}
+
+async function buildRadarExtrapolation(){
+  const src = lastRadarSource;
+  if (!src) throw new Error("no radar source");
+  const b = map.getBounds();
+  const W = 384, H = 288;
+  let url0, url1, interval, baseT;
+  if (src.type === "rv"){
+    const p = src.past;
+    if (!p || p.length < 2) throw new Error("not enough frames");
+    const f1 = p[p.length - 1], f0 = p[p.length - 2];
+    url1 = (z,x,y) => `${src.host}${f1.path}/256/${z}/${x}/${y}/2/1_1.png`;
+    url0 = (z,x,y) => `${src.host}${f0.path}/256/${z}/${x}/${y}/2/1_1.png`;
+    interval = Math.max(300, f1.time - f0.time);
+    baseT = f1.time;
+  } else {
+    url1 = (z,x,y) => `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913/${z}/${x}/${y}.png`;
+    url0 = (z,x,y) => `https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/nexrad-n0q-900913-m10m/${z}/${x}/${y}.png`;
+    interval = 600;
+    baseT = Math.floor(Date.now() / 1000);
+  }
+  const [r0, r1] = await Promise.all([rasterizeRadar(url0, b, W, H), rasterizeRadar(url1, b, W, H)]);
+  const v = estimateMotion(r0.data, r1.data, W, H);
+  const steps = Math.max(1, Math.round(1800 / interval));   /* enough frames to reach ~+30 min */
+  for (let k = 1; k <= steps; k++){
+    const fc = document.createElement("canvas");
+    fc.width = W; fc.height = H;
+    fc.getContext("2d").drawImage(r1.canvas, v.dx * k, v.dy * k);
+    radarLayers.push(L.imageOverlay(fc.toDataURL(), b, { opacity:0, interactive:false }));
+    frameTimes.push(baseT + interval * k);
+    frameFuture.push(true);
+  }
+  const futMin = Math.round((frameTimes[frameTimes.length - 1] - frameTimes[nowIdx]) / 60);
+  document.querySelector(".tfut").textContent = "+" + futMin + " min";
+  buildTicks();
+  showFrame(frame);
+  if (!predToastShown){
+    predToastShown = true;
+    toast("Prediction live — extrapolated from actual radar motion, no model", 4200);
+  }
+}
+
+async function buildPrediction(){
+  try { await buildRadarExtrapolation(); predKind = "extrap"; return; }
+  catch(e){ /* CORS-tainted canvas or tile failure — model backup below */ }
+  try { await buildFallbackPrediction(); if (frameFuture.some(Boolean)) predKind = "model"; }
+  catch(e){ /* leave past-only; retried on the 5-min refresh */ }
+}
+
+/* Predictions are rendered for the current viewport — rebuild after panning */
+map.on("moveend", ()=>{
+  if (mdlOn || playing) return;
+  if (predKind === "extrap" || predKind === "model"){
+    clearTimeout(predRegenT);
+    predRegenT = setTimeout(()=>{ clearPredictionFrames(); buildPrediction(); }, 1300);
+  }
+});
+
 async function loadRadar(){
   const wasPlaying = playing;
   stopLoop();
   try {
-    const r = await fetch("https://api.rainviewer.com/public/weather-maps.json");
-    if (!r.ok) throw new Error("rainviewer " + r.status);
-    const j = await r.json();
+    const j = await fetchRadarJson();
     clearRadar();
     const past = (j.radar.past || []).slice(-8);          /* ~70 min history */
     const future = j.radar.nowcast || [];                  /* ~30 min ahead  */
+    lastRadarSource = { type:"rv", host:j.host, past };
+    predKind = future.length ? "radar" : null;
     const frames = past.concat(future);
     frames.forEach((f,i)=>{
-      const url = `${j.host}${f.path}/256/{z}/{x}/{y}/6/1_1.png`;
+      const url = `${j.host}${f.path}/256/{z}/{x}/{y}/2/1_1.png`;
       radarLayers.push(L.tileLayer(url, { opacity:0, maxZoom:19, maxNativeZoom:7, updateWhenZooming:false, keepBuffer:4, attribution:"Radar: RainViewer" }));
       frameTimes.push(f.time);
       frameFuture.push(i >= past.length);
@@ -522,7 +742,7 @@ async function loadRadar(){
     $("tstart").textContent = "−" + Math.round((frameTimes[frameTimes.length-future.length-1] - frameTimes[0])/60) + " min";
     const futMin = future.length ? Math.round((frameTimes[frameTimes.length-1] - frameTimes[past.length-1])/60) : 0;
     document.querySelector(".tfut").textContent = futMin > 0 ? "+" + futMin + " min" : "";
-    if (!future.length) toast("No prediction frames in this radar update — check back in a few minutes");
+    if (!future.length) buildPrediction();
     buildTicks();
     nowIdx = Math.max(0, past.length - 1);
     showFrame(nowIdx);   /* start at "now" */
@@ -546,6 +766,9 @@ async function loadRadar(){
     buildTicks();
     nowIdx = radarLayers.length - 1;
     showFrame(nowIdx);
+    lastRadarSource = { type:"iem" }; predKind = null;
+    buildPrediction();
+    toast("Global radar source unreachable — showing NOAA radar; prediction from short-range model. Auto-retrying.", 4500);
   }
 }
 loadRadar();
