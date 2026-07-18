@@ -77,7 +77,12 @@ html,body{height:100%;background:var(--ink);color:var(--text);font-family:'Inter
 
 /* ---------- radar timeline (signature) ---------- */
 .timeline{position:fixed;left:12px;right:12px;z-index:1000;background:var(--panel);border:1px solid var(--line);
-  border-radius:var(--radius);padding:10px 14px;display:flex;align-items:center;gap:12px;transition:bottom .25s ease}
+  border-radius:var(--radius);padding:10px 14px;transition:bottom .25s ease}
+.tlmain{display:flex;align-items:center;gap:10px}
+.mdlrow{display:none;align-items:center;gap:10px}
+.mdlrow input[type=range]{flex:1;width:auto}
+.mlabel{flex:none;font:700 .6rem 'IBM Plex Mono',monospace;color:var(--future);border:1px solid var(--future);
+  border-radius:5px;padding:3px 6px;letter-spacing:.06em}
 .playbtn{width:38px;height:38px;flex:none;border-radius:50%;border:1px solid var(--echo);background:transparent;
   color:var(--echo);font-size:.95rem;cursor:pointer;display:grid;place-items:center}
 .playbtn.playing{background:var(--echo);color:var(--ink)}
@@ -89,9 +94,10 @@ html,body{height:100%;background:var(--ink);color:var(--text);font-family:'Inter
 .tick.divider{flex:none;width:2px;height:14px;background:var(--dim);margin-right:3px;border-radius:0;cursor:default}
 .tick.active{background:var(--echo);height:14px}
 .tick.future.active{background:var(--future)}
-.tlabels{display:flex;justify-content:space-between;font:400 .68rem 'IBM Plex Mono',monospace;color:var(--dim)}
-.tnow{color:var(--echo)}
-.tfut{color:var(--future)}
+.tlabels{position:relative;height:1.1em;font:400 .68rem 'IBM Plex Mono',monospace;color:var(--dim)}
+.tlabels #tstart{position:absolute;left:0}
+.tlabels .tnow{position:absolute;transform:translateX(-50%);left:70%;color:var(--echo)}
+.tlabels .tfut{position:absolute;right:0;color:var(--future)}
 .frametime{font:500 .8rem 'IBM Plex Mono',monospace;color:var(--text);min-width:64px;text-align:right}
 .frametime.future{color:var(--future)}
 .predbadge{display:none;font:600 .58rem 'IBM Plex Mono',monospace;color:var(--ink);background:var(--future);
@@ -173,6 +179,7 @@ html,body{height:100%;background:var(--ink);color:var(--text);font-family:'Inter
 /* ---------- NOW button ---------- */
 .nowbtn{flex:none;border:1px solid var(--line);background:var(--panel2);color:var(--dim);
   font:500 .68rem 'IBM Plex Mono',monospace;border-radius:8px;padding:7px 9px;cursor:pointer;letter-spacing:.05em}
+.nowbtn.on{background:var(--future);color:var(--ink);border-color:var(--future)}
 .nowbtn.flash{animation:nowflash .7s ease}
 @keyframes nowflash{0%,100%{background:var(--panel2);color:var(--dim)}40%{background:var(--echo);color:var(--ink)}}
 
@@ -186,10 +193,19 @@ html,body{height:100%;background:var(--ink);color:var(--text);font-family:'Inter
 .strike .ring{position:absolute;top:0;left:0;width:6px;height:6px;margin:-3px 0 0 -3px;border:2px solid #fff;
   border-radius:50%;opacity:.95;animation:ping 1.4s cubic-bezier(.2,.7,.4,1) forwards}
 @keyframes ping{to{width:72px;height:72px;margin:-36px 0 0 -36px;opacity:0}}
-.boltstat{position:fixed;right:12px;top:calc(env(safe-area-inset-top) + 312px);z-index:1000;
+.laybtn.txt{font:700 .6rem 'IBM Plex Mono',monospace;letter-spacing:.03em}
+.boltstat{position:fixed;right:12px;top:calc(env(safe-area-inset-top) + 468px);z-index:1000;
   background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 12px;
   font:500 .7rem 'IBM Plex Mono',monospace;color:var(--bolt);display:none}
 .boltstat.show{display:block}
+
+/* ---------- briefing & 48h strip ---------- */
+.brief{background:var(--panel2);border-left:3px solid var(--echo);border-radius:10px;padding:12px 14px;
+  font-size:.87rem;line-height:1.55;color:var(--text)}
+.strip{display:flex;gap:2px;align-items:flex-end;overflow-x:auto;padding-bottom:4px;height:88px;-webkit-overflow-scrolling:touch}
+.sbcol{flex:none;width:11px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;height:100%}
+.sbcol span{font:400 .58rem 'IBM Plex Mono',monospace;color:var(--dim);white-space:nowrap;height:1em}
+.sbar{width:7px;border-radius:2px 2px 0 0}
 
 /* ---------- radar color key ---------- */
 .legendbar{display:flex;height:22px;border-radius:6px;overflow:hidden;margin:10px 0 6px}
@@ -245,20 +261,31 @@ body.ui-desktop .boltstat{top:auto;right:auto;left:12px;bottom:172px}
 <div class="layers">
   <button class="laybtn" id="boltbtn" title="Live lightning (Blitzortung)">⚡</button>
   <button class="laybtn" id="stormbtn" title="Hurricane tracker (NHC)">🌀<span class="dot" id="stormdot"></span></button>
+  <button class="laybtn" id="trackbtn" title="Storm motion tool — measure a cell's speed &amp; heading">📐</button>
+  <button class="laybtn txt" id="mdlbtn" title="Model precipitation forecast, +48 hours">+48H</button>
   <button class="laybtn" id="keybtn" title="Radar color key">🎨</button>
   <button class="laybtn" id="setbtn" title="Settings">⚙️</button>
 </div>
 <div class="boltstat" id="boltstat">⚡ 0 · last 60 min</div>
 
 <div class="timeline" id="timeline">
-  <button class="playbtn" id="playbtn" title="Play radar loop">▶</button>
-  <div class="track">
-    <div class="ticks" id="ticks"></div>
-    <div class="tlabels"><span id="tstart">−70 min</span><span class="tnow">now</span><span class="tfut">+30 min</span></div>
+  <div class="tlmain" id="tlmain">
+    <button class="playbtn" id="playbtn" title="Play radar loop">▶</button>
+    <div class="track">
+      <div class="ticks" id="ticks"></div>
+      <div class="tlabels"><span id="tstart">−70 min</span><span class="tnow" id="tnowlbl">now</span><span class="tfut">+30 min</span></div>
+    </div>
+    <button class="nowbtn" id="fcstbtn" title="Loop only the predicted radar frames">FCST</button>
+    <button class="nowbtn" id="nowbtn" title="Jump to current radar">NOW</button>
+    <span class="predbadge" id="predbadge">PREDICTED</span>
+    <div class="frametime" id="frametime">--:--</div>
   </div>
-  <button class="nowbtn" id="nowbtn" title="Jump to current radar">NOW</button>
-  <span class="predbadge" id="predbadge">PREDICTED</span>
-  <div class="frametime" id="frametime">--:--</div>
+  <div class="mdlrow" id="mdlrow">
+    <button class="playbtn" id="mplay" title="Play model loop">▶</button>
+    <span class="mlabel">MODEL +48H</span>
+    <input type="range" id="mrange" min="0" max="47" value="0">
+    <div class="frametime future" id="mtime">now</div>
+  </div>
 </div>
 
 <div class="sheet" id="sheet">
@@ -276,12 +303,14 @@ body.ui-desktop .boltstat{top:auto;right:auto;left:12px;bottom:172px}
     <div id="alertsbox"></div>
     <div id="stormsbox"></div>
     <div id="nexthour"></div>
+    <div id="briefing"></div>
     <div class="sectionlabel">Details</div>
     <div class="statgrid" id="stats"></div>
     <div class="sectionlabel">Next 24 hours</div>
     <div class="hourly" id="hourly"></div>
     <div class="sectionlabel">10-day forecast</div>
     <div id="days"></div>
+    <div id="stripwrap"></div>
     <div class="credit">
       Itda Weather · Forecasts &amp; alerts: <a href="https://www.weather.gov" target="_blank">NOAA / National Weather Service</a> ·
       Global forecasts, next-2h precip, UV &amp; AQI: <a href="https://open-meteo.com" target="_blank">Open-Meteo</a> ·
@@ -375,7 +404,7 @@ setTimeout(()=>{
 
 /* ================= RADAR LOOP (RainViewer: global past 70 min + 30 min future) ================= */
 let radarLayers = [], frameTimes = [], frameFuture = [], frame = 0, nowIdx = 0;
-let playing = false, playTimer = null;
+let playing = false, playTimer = null, fcstMode = false;
 let radarOpacity = 0.72, loopSpeed = 550;
 
 function clearRadar(){
@@ -398,6 +427,9 @@ function buildTicks(){
     d.addEventListener("click", ()=>{ stopLoop(); showFrame(i); });
     ticksEl.appendChild(d);
   });
+  /* pin the "now" label to where the past/future divider actually sits */
+  const past = frameFuture.filter(f=>!f).length, tot = frameFuture.length || 1;
+  $("tnowlbl").style.left = Math.round(past / tot * 100) + "%";
 }
 
 function ensureOnMap(i){
@@ -422,7 +454,10 @@ function showFrame(i){
   ticks.forEach((t,j)=> t.classList.toggle("active", j===i));
   const d = new Date(frameTimes[i]*1000);
   const ft = $("frametime");
-  ft.textContent = (frameFuture[i] ? "+" : "") + d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  const clock = d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  ft.textContent = frameFuture[i]
+    ? "+" + Math.max(1, Math.round((frameTimes[i]-frameTimes[nowIdx])/60)) + "m·" + clock
+    : clock;
   ft.classList.toggle("future", !!frameFuture[i]);
   $("predbadge").classList.toggle("show", !!frameFuture[i]);
 }
@@ -430,14 +465,37 @@ function startLoop(){
   if (!radarLayers.length) return;
   playing = true; $("playbtn").textContent = "❚❚"; $("playbtn").classList.add("playing");
   clearInterval(playTimer);
-  playTimer = setInterval(()=> showFrame((frame+1) % radarLayers.length), loopSpeed);
+  playTimer = setInterval(()=>{
+    let next = frame + 1;
+    if (fcstMode){
+      /* loop the current frame + predicted frames only: now → +10 → +20 → +30 → now … */
+      if (next >= radarLayers.length || next <= nowIdx) next = nowIdx;
+    } else if (next >= radarLayers.length){
+      next = 0;
+    }
+    showFrame(next);
+  }, loopSpeed);
 }
 function stopLoop(){
   playing = false; $("playbtn").textContent = "▶"; $("playbtn").classList.remove("playing");
   clearInterval(playTimer);
 }
 $("playbtn").addEventListener("click", ()=> playing ? stopLoop() : startLoop());
+$("fcstbtn").addEventListener("click", ()=>{
+  if (!frameFuture.some(Boolean)){ toast("Predicted frames unavailable right now (radar fallback source has no nowcast)"); return; }
+  fcstMode = !fcstMode;
+  $("fcstbtn").classList.toggle("on", fcstMode);
+  stopLoop();
+  if (fcstMode){
+    for (let k = nowIdx; k < radarLayers.length; k++) ensureOnMap(k);   /* preload every predicted frame */
+    showFrame(nowIdx); startLoop();
+    toast("Forecast mode — looping now → prediction");
+  }
+  else showFrame(nowIdx);
+});
 $("nowbtn").addEventListener("click", ()=>{
+  fcstMode = false;
+  $("fcstbtn").classList.remove("on");
   stopLoop();
   showFrame(nowIdx);
   const b = $("nowbtn");
@@ -462,6 +520,9 @@ async function loadRadar(){
       frameFuture.push(i >= past.length);
     });
     $("tstart").textContent = "−" + Math.round((frameTimes[frameTimes.length-future.length-1] - frameTimes[0])/60) + " min";
+    const futMin = future.length ? Math.round((frameTimes[frameTimes.length-1] - frameTimes[past.length-1])/60) : 0;
+    document.querySelector(".tfut").textContent = futMin > 0 ? "+" + futMin + " min" : "";
+    if (!future.length) toast("No prediction frames in this radar update — check back in a few minutes");
     buildTicks();
     nowIdx = Math.max(0, past.length - 1);
     showFrame(nowIdx);   /* start at "now" */
@@ -585,7 +646,7 @@ async function loadLocation(lat, lon, label){
   const omURL = "https://api.open-meteo.com/v1/forecast?latitude=" + lat.toFixed(4) + "&longitude=" + lon.toFixed(4) +
     "&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,pressure_msl,surface_pressure,precipitation,dew_point_2m" +
     "&minutely_15=precipitation" +
-    "&hourly=temperature_2m,precipitation_probability,weather_code,uv_index,dew_point_2m,pressure_msl,visibility" +
+    "&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,uv_index,dew_point_2m,pressure_msl,visibility" +
     "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,uv_index_max" +
     "&forecast_days=10&timezone=auto&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch";
   const aqURL = "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=" + lat.toFixed(4) + "&longitude=" + lon.toFixed(4) + "&current=us_aqi";
@@ -633,8 +694,10 @@ async function loadLocation(lat, lon, label){
 
   renderCurrent(ob, hr, om, aq);
   renderNextHour(om);
+  renderBriefing(om, al);
   renderHourly(hr, om);
   renderDays(fc, om);
+  renderStrip(om);
   renderAlerts(al);
   if (!point) toast("Outside the US: full forecast shown; official NWS alerts are US-only");
 }
@@ -808,6 +871,96 @@ function renderDays(fc, om){
     <div class="d">${r.desc}</div>
     <div class="hi">${r.hi!=null?r.hi+"°":""}</div><div class="lo">${r.lo!=null?r.lo+"°":""}</div>
   </div>`).join("");
+}
+
+/* ================= AUTO-BRIEFING (your on-device forecast discussion) ================= */
+function compass(deg){
+  const dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+  return dirs[Math.round(deg/22.5) % 16];
+}
+function renderBriefing(om, al){
+  const box = $("briefing");
+  if (!om){ box.innerHTML = ""; return; }
+  const i = omNowIdx(om), H = om.hourly, c = om.current, d = om.daily;
+  const S = [];
+
+  if (c && c.weather_code != null && c.temperature_2m != null){
+    let s = `Currently ${wmoInfo(c.weather_code, c.is_day).text.toLowerCase()} at ${Math.round(c.temperature_2m)}°`;
+    if (c.wind_speed_10m != null){
+      s += `, winds ${Math.round(c.wind_speed_10m)} mph`;
+      if (c.wind_gusts_10m != null && c.wind_gusts_10m > c.wind_speed_10m + 8) s += ` gusting ${Math.round(c.wind_gusts_10m)}`;
+      if (c.wind_direction_10m != null) s += ` out of the ${compass(c.wind_direction_10m)}`;
+    }
+    S.push(s + ".");
+  }
+
+  /* precip onset from the 15-min model */
+  if (om.minutely_15 && om.minutely_15.precipitation){
+    const times = om.minutely_15.time, vals = om.minutely_15.precipitation;
+    const nowStr = c && c.time ? c.time : times[0];
+    let s0 = times.findIndex(t => t >= nowStr); if (s0 < 0) s0 = 0;
+    let onset = -1;
+    for (let k = s0; k < Math.min(s0 + 8, vals.length); k++){
+      if (vals[k] > 0){ onset = (k - s0) * 15; break; }
+    }
+    if (onset === 0) S.push("Precipitation is in the immediate area now.");
+    else if (onset > 0) S.push(`The short-range model brings precipitation in within ~${onset} minutes.`);
+  }
+
+  /* 12-hour precip outlook */
+  if (H && H.precipitation_probability){
+    let peak = 0, peakI = i;
+    for (let k = i; k < Math.min(i + 12, H.time.length); k++){
+      if (H.precipitation_probability[k] > peak){ peak = H.precipitation_probability[k]; peakI = k; }
+    }
+    if (peak >= 40) S.push(`Precip chances peak near ${peak}% around ${fmtHour(H.time[peakI])}.`);
+    else S.push(`Precip chances stay low (≤${peak}%) through the next 12 hours.`);
+  }
+
+  /* pressure tendency — the classic forecaster signal */
+  if (H && H.pressure_msl && i >= 3 && H.pressure_msl[i] != null && H.pressure_msl[i-3] != null){
+    const dp = H.pressure_msl[i] - H.pressure_msl[i-3];
+    if (dp <= -1.5) S.push("Pressure is falling — often the signature of an approaching system.");
+    else if (dp >= 1.5) S.push("Pressure is rising — conditions trending quieter.");
+  }
+
+  if (al && al.features && al.features.length){
+    S.push(`⚠️ ${al.features.length} active NWS alert${al.features.length > 1 ? "s" : ""} for this area — details above.`);
+  }
+
+  if (d && d.sunset && d.sunset[0]){
+    const mins = (new Date(d.sunset[0]) - Date.now()) / 60000;
+    if (mins > 0 && mins < 90) S.push(`Sunset in about ${Math.round(mins)} minutes.`);
+  }
+
+  box.innerHTML = S.length
+    ? `<div class="sectionlabel">Your briefing</div><div class="brief">${S.join(" ")}</div>`
+    : "";
+}
+
+/* ================= 48-HOUR PRECIP STRIP ================= */
+function renderStrip(om){
+  const box = $("stripwrap");
+  if (!om || !om.hourly || !om.hourly.time){ box.innerHTML = ""; return; }
+  const i0 = omNowIdx(om), H = om.hourly;
+  const end = Math.min(i0 + 48, H.time.length);
+  let bars = "", total = 0;
+  for (let i = i0; i < end; i++){
+    const pop = H.precipitation_probability ? (H.precipitation_probability[i] || 0) : 0;
+    const amt = H.precipitation ? (H.precipitation[i] || 0) : 0;   /* inches */
+    total += amt;
+    const hpx = Math.max(3, Math.round(pop * 0.6));
+    const col = amt <= 0.005 ? "#2a3646" : amt < 0.02 ? "#009cf7" : amt < 0.06 ? "#02c802"
+              : amt < 0.15 ? "#fdf802" : amt < 0.35 ? "#fd9500" : "#fd0000";
+    const t = new Date(H.time[i]);
+    const lbl = ((i - i0) % 6 === 0) ? `<span>${t.toLocaleTimeString([], {hour:"numeric"})}</span>` : "<span></span>";
+    bars += `<div class="sbcol"><div class="sbar" style="height:${hpx}px;background:${col}"></div>${lbl}</div>`;
+  }
+  box.innerHTML = `<div class="sectionlabel">Next 48 hours — precipitation</div>
+    <div class="strip">${bars}</div>
+    <div class="nhnote">${total > 0.01
+      ? `Bar height = chance · color = intensity · ≈ ${total.toFixed(2)}&Prime; total expected (model)`
+      : "The model shows a mostly dry 48 hours."}</div>`;
 }
 
 function renderAlerts(al){
@@ -1099,6 +1252,185 @@ function geolocate(silent){
   );
 }
 $("locbtn").addEventListener("click", ()=>geolocate(false));
+
+/* ================= STORM MOTION TOOL (be the meteorologist) =================
+   Tap a storm cell on an older frame, scrub forward, tap it again — the tool
+   computes speed & heading, projects the next hour, and estimates closest
+   approach to your location. This is genuinely how forecasters eyeball it. */
+const motionLayer = L.layerGroup();
+let motionArmed = false, motionP1 = null;
+
+function bearingDeg(a, b){
+  const toRad = x => x*Math.PI/180, toDeg = x => x*180/Math.PI;
+  const y = Math.sin(toRad(b.lng-a.lng)) * Math.cos(toRad(b.lat));
+  const x = Math.cos(toRad(a.lat))*Math.sin(toRad(b.lat)) - Math.sin(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.cos(toRad(b.lng-a.lng));
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+function destPoint(p, brg, distM){
+  const R = 6371000, toRad = x => x*Math.PI/180, toDeg = x => x*180/Math.PI;
+  const dR = distM/R, th = toRad(brg), la1 = toRad(p.lat), lo1 = toRad(p.lng);
+  const la2 = Math.asin(Math.sin(la1)*Math.cos(dR) + Math.cos(la1)*Math.sin(dR)*Math.cos(th));
+  const lo2 = lo1 + Math.atan2(Math.sin(th)*Math.sin(dR)*Math.cos(la1), Math.cos(dR) - Math.sin(la1)*Math.sin(la2));
+  return L.latLng(toDeg(la2), toDeg(lo2));
+}
+
+$("trackbtn").addEventListener("click", ()=>{
+  motionArmed = !motionArmed;
+  $("trackbtn").classList.toggle("on", motionArmed);
+  motionP1 = null;
+  motionLayer.clearLayers();
+  if (motionArmed){
+    motionLayer.addTo(map);
+    stopLoop();
+    toast("Storm tracker · Step 1: scrub to an OLDER frame, tap a storm cell", 5500);
+  } else {
+    map.removeLayer(motionLayer);
+  }
+});
+
+map.on("click", e => {
+  if (!motionArmed || mdlOn) return;
+  const t = frameTimes[frame];
+  if (!t) return;
+  if (!motionP1){
+    motionP1 = { ll: e.latlng, t };
+    motionLayer.clearLayers();
+    L.circleMarker(e.latlng, { radius:6, color:"#ffd166", weight:2, fillOpacity:.3 }).addTo(motionLayer);
+    toast("Step 2: scrub to the CURRENT frame, tap the SAME storm again", 5500);
+    return;
+  }
+  const dt = t - motionP1.t;   /* seconds between the two frames */
+  if (dt <= 0){ toast("Second tap must be on a LATER frame — scrub forward, then tap"); return; }
+  const p1 = motionP1.ll, p2 = e.latlng;
+  const distM = haversineMeters(p1.lat, p1.lng, p2.lat, p2.lng);
+  const mps = distM / dt;
+  const mph = mps * 2.23694;
+  const brg = bearingDeg(p1, p2);
+  const proj = destPoint(p2, brg, mps * 3600);   /* +60 min */
+
+  L.circleMarker(p2, { radius:6, color:"#ff9e3d", weight:2, fillOpacity:.3 }).addTo(motionLayer);
+  L.polyline([p1, p2], { color:"#ffd166", weight:2, dashArray:"4 4" }).addTo(motionLayer);
+  L.polyline([p2, proj], { color:"#ff5d5d", weight:2.5 }).addTo(motionLayer);
+
+  let eta = "";
+  if (refLoc && mps > 0.5){
+    const dHome = haversineMeters(p2.lat, p2.lng, refLoc.lat, refLoc.lon);
+    const brgHome = bearingDeg(p2, L.latLng(refLoc.lat, refLoc.lon));
+    const rel = (brgHome - brg) * Math.PI/180;
+    const along = dHome * Math.cos(rel);
+    const cross = Math.abs(dHome * Math.sin(rel));
+    if (along > 0){
+      const when = new Date(Date.now() + (along/mps)*1000).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+      eta = `<br>Closest approach to you: ~${(cross/1000).toFixed(1)} km around ${when}`;
+    } else {
+      eta = "<br>Moving away from your location.";
+    }
+  }
+  L.popup().setLatLng(p2).setContent(
+    `<b>Storm motion</b><br>${Math.round(mph)} mph toward the ${compass(brg)}<br>Red line = projected next 60 min${eta}`
+  ).openOn(map);
+  motionP1 = null;   /* ready for another measurement */
+});
+
+/* ================= MODEL PRECIP MODE (+48h, built from free Open-Meteo grid) =================
+   Nobody serves free model-radar tiles, so we make our own: sample an 80-point
+   grid over the visible map, pull each point's hour-by-hour predicted precip,
+   and paint it with the radar color ramp. Blocky by nature — it's a forecast
+   model (~10-20 km cells), not radar — but it's the same data the paid apps render. */
+let mdlOn = false, mdlHour = 0, mdlData = null, mdlOverlay = null, mdlPlaying = false, mdlTimer = null, mdlFetchTimer = null;
+const MDL_NX = 10, MDL_NY = 8, MDL_HOURS = 48;
+
+function precipColorMM(mm){
+  if (!(mm > 0.05)) return null;
+  if (mm < 0.3)  return "rgba(0,156,247,.62)";
+  if (mm < 1)    return "rgba(2,200,2,.62)";
+  if (mm < 2.5)  return "rgba(253,248,2,.62)";
+  if (mm < 7)    return "rgba(254,147,0,.66)";
+  if (mm < 15)   return "rgba(255,0,0,.7)";
+  return "rgba(254,0,254,.7)";
+}
+
+async function fetchModelGrid(){
+  if (!mdlOn) return;
+  $("mtime").innerHTML = '<span class="spin">◌</span>';
+  const b = map.getBounds();
+  const lats = [], lons = [];
+  for (let r = 0; r < MDL_NY; r++){
+    for (let c2 = 0; c2 < MDL_NX; c2++){
+      lats.push((b.getSouth() + (r + 0.5)/MDL_NY * (b.getNorth() - b.getSouth())).toFixed(3));
+      lons.push((b.getWest() + (c2 + 0.5)/MDL_NX * (b.getEast() - b.getWest())).toFixed(3));
+    }
+  }
+  try {
+    const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lats.join(",")}&longitude=${lons.join(",")}&hourly=precipitation&forecast_days=3&timezone=UTC`);
+    if (!r.ok) throw new Error("grid " + r.status);
+    let j = await r.json();
+    if (!Array.isArray(j)) j = [j];
+    const nowIso = new Date().toISOString().slice(0,13);
+    const t0 = j[0].hourly.time.findIndex(t => t.slice(0,13) >= nowIso);
+    mdlData = { bounds: b, start: Math.max(0, t0), cells: j.map(loc => loc.hourly.precipitation) };
+    renderModelHour(mdlHour);
+  } catch(e){
+    $("mtime").textContent = "—";
+    toast("Model grid fetch failed — try again in a moment");
+  }
+}
+
+function renderModelHour(h){
+  if (!mdlOn || !mdlData) return;
+  mdlHour = h;
+  $("mrange").value = h;
+  const canvas = document.createElement("canvas");
+  canvas.width = MDL_NX; canvas.height = MDL_NY;
+  const ctx = canvas.getContext("2d");
+  for (let r = 0; r < MDL_NY; r++){
+    for (let c2 = 0; c2 < MDL_NX; c2++){
+      const arr = mdlData.cells[r * MDL_NX + c2];
+      const mm = arr ? arr[mdlData.start + h] : 0;
+      const col = precipColorMM(mm);
+      if (col){ ctx.fillStyle = col; ctx.fillRect(c2, MDL_NY - 1 - r, 1, 1); }
+    }
+  }
+  const url = canvas.toDataURL();
+  if (mdlOverlay) map.removeLayer(mdlOverlay);
+  mdlOverlay = L.imageOverlay(url, mdlData.bounds, { opacity:.9, interactive:false }).addTo(map);
+  const dt = new Date(Date.now() + h * 3600000);
+  $("mtime").textContent = (h === 0 ? "now" : "+" + h + "h") + "·" + dt.toLocaleTimeString([], {hour:"numeric"});
+}
+
+function mdlMoveEnd(){ clearTimeout(mdlFetchTimer); mdlFetchTimer = setTimeout(fetchModelGrid, 900); }
+function startModelPlay(){
+  mdlPlaying = true; $("mplay").textContent = "❚❚"; $("mplay").classList.add("playing");
+  clearInterval(mdlTimer);
+  mdlTimer = setInterval(()=> renderModelHour((mdlHour + 1) % MDL_HOURS), 380);
+}
+function stopModelPlay(){
+  mdlPlaying = false; $("mplay").textContent = "▶"; $("mplay").classList.remove("playing");
+  clearInterval(mdlTimer);
+}
+$("mplay").addEventListener("click", ()=> mdlPlaying ? stopModelPlay() : startModelPlay());
+$("mrange").addEventListener("input", e => { stopModelPlay(); renderModelHour(+e.target.value); });
+
+$("mdlbtn").addEventListener("click", ()=>{
+  mdlOn = !mdlOn;
+  $("mdlbtn").classList.toggle("on", mdlOn);
+  $("tlmain").style.display = mdlOn ? "none" : "flex";
+  $("mdlrow").style.display = mdlOn ? "flex" : "none";
+  if (mdlOn){
+    stopLoop();
+    radarLayers.forEach(l => { if (map.hasLayer(l)) l.setOpacity(0); });
+    toast("Model mode: predicted precipitation out to +48h (blocky = model cells, not radar)", 4500);
+    fetchModelGrid();
+    map.on("moveend", mdlMoveEnd);
+  } else {
+    stopModelPlay();
+    map.off("moveend", mdlMoveEnd);
+    clearTimeout(mdlFetchTimer);
+    if (mdlOverlay){ map.removeLayer(mdlOverlay); mdlOverlay = null; }
+    mdlData = null;
+    showFrame(frame);   /* restore radar */
+  }
+});
 
 /* ================= SETTINGS ================= */
 let uiMode = "auto";
